@@ -141,11 +141,11 @@ endif()
 
 # Gather information about the employed CMake version's behavior
 set(DCMTK_CMAKE_HAS_CXX_STANDARD FALSE)
-if(NOT CMAKE_MAJOR_VERSION LESS 3) # CMake versions prior to 3 don't understand VERSION_LESS etc.
-  if(NOT CMAKE_VERSION VERSION_LESS "3.1.3")
-    set(DCMTK_CMAKE_HAS_CXX_STANDARD TRUE)
-  endif()
+
+if(NOT CMAKE_VERSION VERSION_LESS "3.1.3")
+  set(DCMTK_CMAKE_HAS_CXX_STANDARD TRUE)
 endif()
+
 define_property(GLOBAL PROPERTY DCMTK_CMAKE_HAS_CXX_STANDARD
   BRIEF_DOCS "TRUE iff the CXX_STANDARD property exists."
   FULL_DOCS "TRUE for CMake versions since 3.1.3 that evaluate the CXX_STANDARD property and CMAKE_CXX_STANDARD variable."
@@ -209,11 +209,17 @@ DCMTK_INFERABLE_OPTION(DCMTK_ENABLE_CXX11 "Enable use of native C++11 features (
 
 # On Windows, the built-in dictionary is default, on Unix the external one.
 # It is not possible to use both, built-in plus external default dictionary.
-if(WIN32 OR MINGW)
-  set(DCMTK_DEFAULT_DICT "builtin" CACHE STRING "Denotes whether DCMTK will use built-in (compiled-in), external (file), or no default dictionary on startup")
-else() # built-in dictionary turned off on Unix per default
-  set(DCMTK_DEFAULT_DICT "external" CACHE STRING "Denotes whether DCMTK will use built-in (compiled-in), external (file), or no default dictionary on startup")
+if(NOT DEFINED DCMTK_DEFAULT_DICT)
+  if(WIN32 OR MINGW)
+    set(DCMTK_DEFAULT_DICT_DEFAULT "builtin")
+  else() # built-in dictionary turned off on Unix per default
+    set(DCMTK_DEFAULT_DICT_DEFAULT "external")
+  endif()
+else()
+  # prefer user specified one:
+  set(DCMTK_DEFAULT_DICT_DEFAULT "${DCMTK_DEFAULT_DICT}")
 endif()
+set(DCMTK_DEFAULT_DICT "${DCMTK_DEFAULT_DICT_DEFAULT}" CACHE STRING "Denotes whether DCMTK will use built-in (compiled-in), external (file), or no default dictionary on startup")
 set_property(CACHE DCMTK_DEFAULT_DICT PROPERTY STRINGS builtin external none)
 if (DCMTK_DEFAULT_DICT EQUAL "none")
   message(WARNING "Denotes whether DCMTK will use built-in (compiled-in), external (file), or no default dictionary on startup")
@@ -588,20 +594,6 @@ set_property(GLOBAL PROPERTY DCMTK_MODERN_CXX_STANDARDS 11 14 17)
 # Enable various warnings by default
 #-----------------------------------------------------------------------------
 
-# fallback implementation of add_compile_options()
-if(CMAKE_MAJOR_VERSION LESS 3 AND NOT CMAKE_VERSION VERSION_EQUAL 2.8.12)
-  function(add_compile_options)
-    foreach(OPTION ${ARGN})
-        foreach(FLAG C CXX)
-            string(FIND "${CMAKE_${FLAG}_FLAGS}" "${OPTION}" IDX)
-            if(IDX EQUAL -1)
-                set("CMAKE_${FLAG}_FLAGS" "${CMAKE_${FLAG}_FLAGS} ${OPTION}" PARENT_SCOPE)
-            endif()
-        endforeach()
-    endforeach()
-  endfunction()
-endif()
-
 if(MSVC)
     # This code removes existing warning flags to prevent MSVC warning D9025.
     # Remove it once our minimum CMake version is >= 3.15, since those newer
@@ -775,11 +767,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL SunPro)
 endif()
 
 #-----------------------------------------------------------------------------
-# workaround for using the deprecated generator expression $<CONFIGURATION>
-# with old CMake versions that do not understand $<CONFIG>
+# generator expression $<CONFIG>
 #-----------------------------------------------------------------------------
-if(CMAKE_VERSION VERSION_LESS 3.0.0)
-  set(DCMTK_CONFIG_GENERATOR_EXPRESSION "$<CONFIGURATION>" CACHE INTERNAL "the generator expression to use for retrieving the current config")
-else()
-  set(DCMTK_CONFIG_GENERATOR_EXPRESSION "$<CONFIG>" CACHE INTERNAL "the generator expression to use for retrieving the current config")
-endif()
+set(DCMTK_CONFIG_GENERATOR_EXPRESSION "$<CONFIG>" CACHE INTERNAL "the generator expression to use for retrieving the current config")

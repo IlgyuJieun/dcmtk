@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2022, OFFIS e.V.
+ *  Copyright (C) 2002-2023, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -652,6 +652,9 @@ OFString DicomDirInterface::recordTypeToName(const E_DirRecType recordType)
         case ERT_Annotation:
             recordName = "Annotation";
             break;
+        case ERT_Inventory:
+            recordName = "Inventory";
+            break;
         default:
             recordName = "(unknown-directory-record-type)";
             break;
@@ -831,6 +834,8 @@ static E_DirRecType sopClassToRecordType(const OFString &sopClass)
     }
     else if (compare(sopClass, UID_MicroscopyBulkSimpleAnnotationsStorage))
         result = ERT_Annotation;
+    else if (compare(sopClass, UID_InventoryStorage))
+        result = ERT_Inventory;
     return result;
 }
 
@@ -1746,7 +1751,8 @@ OFCondition DicomDirInterface::checkSOPClassAndXfer(DcmMetaInfo *metainfo,
                                 compare(mediaSOPClassUID, UID_ColorPaletteStorage) ||
                                 compare(mediaSOPClassUID, UID_TractographyResultsStorage) ||
                                 compare(mediaSOPClassUID, UID_ContentAssessmentResultsStorage) ||
-                                compare(mediaSOPClassUID, UID_MicroscopyBulkSimpleAnnotationsStorage);
+                                compare(mediaSOPClassUID, UID_MicroscopyBulkSimpleAnnotationsStorage) ||
+                                compare(mediaSOPClassUID, UID_InventoryStorage);
                     }
                     /* the following SOP classes have been retired with previous editions of the DICOM standard */
                     if (!found && RetiredSOPClassSupport)
@@ -2546,6 +2552,20 @@ OFCondition DicomDirInterface::checkMandatoryAttributes(DcmMetaInfo *metainfo,
                 result = EC_MissingAttribute;
             if (!checkExistsWithValue(dataset, DCM_ImplantTemplateGroupIssuer, filename))
                 result = EC_MissingAttribute;
+        }
+        else if (recordType == ERT_Inventory)
+        {
+            /* check whether all type 1 elements are really present */
+            if (!checkExistsWithValue(dataset, DCM_ContentDate, filename))
+                result = EC_MissingAttribute;
+            if (!checkExistsWithValue(dataset, DCM_ContentTime, filename))
+                result = EC_MissingAttribute;
+            if (!checkExistsWithValue(dataset, DCM_InventoryLevel, filename))
+                result = EC_MissingAttribute;
+            if (!checkExistsWithValue(dataset, DCM_InventoryCompletionStatus, filename))
+                result = EC_MissingAttribute;
+            if (!checkExistsWithValue(dataset, DCM_TotalNumberOfStudyRecords, filename))
+                result = EC_MissingAttribute;
         } else {
             /* PatientID is type 1 in DICOMDIR and type 2 in images */
             if (!InventMode)
@@ -3050,6 +3070,7 @@ OFBool DicomDirInterface::recordMatchesDataset(DcmDirectoryRecord *record,
             case ERT_Assessment:
             case ERT_Radiotherapy:
             case ERT_Annotation:
+            case ERT_Inventory:
                 /* The attribute ReferencedSOPInstanceUID is automatically
                  * put into a Directory Record when a filename is present.
                 */
@@ -4338,6 +4359,41 @@ DcmDirectoryRecord *DicomDirInterface::buildAnnotationRecord(DcmDirectoryRecord 
 }
 
 
+// create or update inventory record and copy required values from dataset
+DcmDirectoryRecord *DicomDirInterface::buildInventoryRecord(DcmDirectoryRecord *record,
+                                                            DcmFileFormat *fileformat,
+                                                            const OFString &referencedFileID,
+                                                            const OFFilename &sourceFilename)
+{
+    /* create new inventory record */
+    if (record == NULL)
+        record = new DcmDirectoryRecord(ERT_Implant, referencedFileID.c_str(), sourceFilename, fileformat);
+    if (record != NULL)
+    {
+        /* check whether new record is ok */
+        if (record->error().good())
+        {
+            DcmDataset *dataset = fileformat->getDataset();
+            /* copy attribute values from dataset to inventory record */
+            copyElementType1(dataset, DCM_ContentDate, record, sourceFilename);
+            copyElementType1(dataset, DCM_ContentTime, record, sourceFilename);
+            copyElementType1(dataset, DCM_InventoryLevel, record, sourceFilename);
+            copyElementType1(dataset, DCM_InventoryCompletionStatus, record, sourceFilename);
+            copyElementType1(dataset, DCM_TotalNumberOfStudyRecords, record, sourceFilename);
+            copyElementType2(dataset, DCM_InventoryPurpose, record, sourceFilename);
+            copyElementType2(dataset, DCM_ScopeOfInventorySequence, record, sourceFilename);
+        } else {
+            printRecordErrorMessage(record->error(), ERT_Inventory, "create");
+            /* free memory */
+            delete record;
+            record = NULL;
+        }
+    } else
+        printRecordErrorMessage(EC_MemoryExhausted, ERT_Inventory, "create");
+    return record;
+}
+
+
 // create or update image record and copy required values from dataset
 DcmDirectoryRecord *DicomDirInterface::buildImageRecord(DcmDirectoryRecord *record,
                                                         DcmFileFormat *fileformat,
@@ -4777,6 +4833,9 @@ DcmDirectoryRecord *DicomDirInterface::addRecord(DcmDirectoryRecord *parent,
                 case ERT_Annotation:
                     record = buildAnnotationRecord(record, fileformat, referencedFileID, sourceFilename);
                     break;
+                case ERT_Inventory:
+                    record = buildInventoryRecord(record, fileformat, referencedFileID, sourceFilename);
+                    break;
                 default:
                     /* it can only be an image */
                     record = buildImageRecord(record, fileformat, referencedFileID, sourceFilename);
@@ -4922,11 +4981,25 @@ void DicomDirInterface::inventMissingInstanceLevelAttributes(DcmDirectoryRecord 
             switch (record->getRecordType())
             {
                 case ERT_Image:
+                case ERT_SRDocument:
+                case ERT_Presentation:
+                case ERT_Waveform:
                 case ERT_RTDose:
                 case ERT_RTStructureSet:
                 case ERT_RTPlan:
-                case ERT_StoredPrint:
+                case ERT_RTTreatRecord:
+                case ERT_KeyObjectDoc:
+                case ERT_Registration:
+                case ERT_Fiducial:
+                case ERT_Spectroscopy:
+                case ERT_EncapDoc:
+                case ERT_ValueMap:
                 case ERT_Surface:
+                case ERT_Measurement:
+                case ERT_Tract:
+                case ERT_Assessment:
+                case ERT_Radiotherapy:
+                case ERT_Annotation:
                     if (!record->tagExistsWithValue(DCM_InstanceNumber))
                         setDefaultValue(record, DCM_InstanceNumber, AutoInstanceNumber++);
                     break;
@@ -4943,23 +5016,11 @@ void DicomDirInterface::inventMissingInstanceLevelAttributes(DcmDirectoryRecord 
                     if (!record->tagExistsWithValue(DCM_RETIRED_CurveNumber))
                         setDefaultValue(record, DCM_RETIRED_CurveNumber, AutoCurveNumber++);
                     break;
-                case ERT_SRDocument:
-                case ERT_Presentation:
-                case ERT_Waveform:
-                case ERT_RTTreatRecord:
-                case ERT_KeyObjectDoc:
-                case ERT_Registration:
-                case ERT_Fiducial:
+                case ERT_StoredPrint:
                 case ERT_RawData:
-                case ERT_Spectroscopy:
-                case ERT_EncapDoc:
-                case ERT_ValueMap:
                 case ERT_Stereometric:
-                case ERT_Measurement:
                 case ERT_Plan:
                 case ERT_SurfaceScan:
-                case ERT_Tract:
-                case ERT_Assessment:
                     /* nothing to do */
                     break;
                 default:
@@ -5026,6 +5087,12 @@ OFCondition DicomDirInterface::addDicomFile(const OFFilename &filename,
             {
                 /* add an implant assy record below the root */
                 if (addRecord(rootRecord, ERT_ImplantAssy, &fileformat, fileID, pathname) == NULL)
+                    result = EC_CorruptedData;
+            }
+            else if (compare(sopClass, UID_InventoryStorage))
+            {
+                /* add an inventory record below the root */
+                if (addRecord(rootRecord, ERT_Inventory, &fileformat, fileID, pathname) == NULL)
                     result = EC_CorruptedData;
             } else {
                 /* add a patient record below the root */

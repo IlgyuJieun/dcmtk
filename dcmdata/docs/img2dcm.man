@@ -26,7 +26,7 @@ without any template dataset.
 \verbatim
 imgfile-in   image input filename
 
-dcmfile-out  DICOM output filename
+dcmfile-out  DICOM output filename ("-" for stdout)
 \endverbatim
 
 \section img2dcm_options OPTIONS
@@ -221,19 +221,20 @@ order:
     values for validity, e.g. it does not look into sequences to adapt any
     attributes to the new object (referenced images etc.). Therefore, it is
     recommended to use the templates in the data directory for (old) SC and
-    VLP objects. See also section "Input Templates".
-
-\li Using the \e --dataset-from-xml option \b img2dcm is also forced to
-    import attributes from an existing file. In this case, however, the
+    VLP objects. See also section "Input Templates". As an alternative to
+    option \e --dataset-from the mutually exclusive option
+    \e --dataset-from-xml can be used. In this case, however, the
     file must contain XML data in the format as produced by \b dcm2xml.
 
-\li The \e --study-from and \e --series-from options (mutually exclusive) can
-    be used to import patient, study and series information from an existing
-    DICOM file. If \e --series-from is specified, then the given DICOM file
-    is opened by \b img2dcm and all mandatory information down to the series
+\li The \e --study-from and \e --series-from options can be used to import
+    patient, study and series information from an existing DICOM file. If
+    \e --series-from is specified, then the given DICOM file is opened by
+    \b img2dcm and all mandatory information down to the series
     level is imported. Note that this includes patient, study and series
     information. In case of \e --study-from, the series information is
-    excluded. The following attributes are taken over:
+    excluded. Using \e --study-from and \e --series-from at the same time does
+    make sense. If both options are provided on the command line, the rightmost
+    option wins. The following attributes are taken over:
     \verbatim
       Patient Level:
         Patient's Name
@@ -276,15 +277,16 @@ order:
 \subsection img2dcm_uids UIDs
 
 New Study and Series Instance UIDs are generated <b>if necessary</b> after
-applying the \e --study-from and \e --series options. If Study Instance UID or
-Series Instance UID are not present after these steps, they are newly generated,
-independently from each other.
+applying the \e --study-from and \e --series-from options. If Study Instance
+UID or Series Instance UID are not present after these steps, they are newly
+generated, independently from each other.
+
 A contrary behavior is chosen for the SOP Instance UID that one could expect
-to be taken over when using the \e --dataset-from option. This is \b not the
-case, the SOP Instance UID is \b not copied to the new object. This should
-be the desirable behavior for most use cases. However, if a certain SOP
-Instance UID should be inserted into the new object, the \e --key option should
-be used.
+to be taken over when using the \e --dataset-from or \e --dataset-from-xml
+option. This is \b not the case, the SOP Instance UID is \b not copied to the
+new object. This should be the desirable behavior for most use cases. However,
+if a certain SOP Instance UID should be inserted into the new object, the
+\e --key option should be used.
 
 \subsection img2dcm_input_templates Input Templates
 
@@ -312,7 +314,7 @@ Rows, Columns etc.) are not copied but replaced by \b img2dcm during conversion.
 When an input template is loaded using \e --dataset-from or \e --dataset-from-xml,
 the specific character set of that template is used for the generated DICOM file.
 If the \e --study-from or \e --series-from options are used additionally,
-img2dcm will try to convert the character set of these attributes to that
+\b img2dcm will try to convert the character set of these attributes to that
 of the template, and will report an error if that is not possible.
 
 If the \e --study-from or \e --series-from options are used without a template,
@@ -478,7 +480,7 @@ of this SOP Class are inserted automatically.
 
 <li>
 img2dcm -i BMP image.bmp out.dcm
-<br>Same as above but tells img2dcm to read a BMP file instead of JPEG.
+<br>Same as above but tells \b img2dcm to read a BMP file instead of JPEG.
 </li>
 
 <li>
@@ -598,6 +600,6 @@ Photography images
 
 \section img2dcm_copyright COPYRIGHT
 
-Copyright (C) 2007-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 2007-2023 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */
